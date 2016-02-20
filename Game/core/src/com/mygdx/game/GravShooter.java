@@ -22,8 +22,9 @@ public class GravShooter extends ApplicationAdapter {
 	private boolean debug;
 	private ShapeRenderer renderer;
 	private Array<Bullet> bullets;
-	private static float v_bullet = 10f;
+	private static float v_bullet = 200f;
 	private static float v_ast = 100f;
+	private static double p_mass = 100.0;
 	private long lastShotTime;
 	private long lastAstTime;
 	
@@ -75,6 +76,9 @@ public class GravShooter extends ApplicationAdapter {
 	    while(iter.hasNext()) {
 	    	Bullet bullet = iter.next();
 	    	bullet.update();
+	    	if(bullet.isOffscreen()) {
+	    		iter.remove();
+	    	}
 	    }
 	}
 	
@@ -122,8 +126,8 @@ public class GravShooter extends ApplicationAdapter {
 			if (angle > 2.0*Math.PI) {
 				angle -= 2.0*Math.PI;
 			}
-			else if (angle < -2.0*Math.PI) {
-				angle += 2*Math.PI;
+			else if (angle < 0) {
+				angle += 2.0*Math.PI;
 			}
 			Double x1_pos = 100*Math.sin(angle + Math.atan(.1));
 			Double y1_pos = 100*Math.cos(angle + Math.atan(.1));
@@ -149,11 +153,11 @@ public class GravShooter extends ApplicationAdapter {
 		
 		public void aim(float radians) {
 			aim_angle = aim_angle + radians;
-			if (aim_angle >= Math.PI/2.0) {
-				aim_angle = (float)(Math.PI/2.0);
+			if (aim_angle >= 1.0) {
+				aim_angle = 1f;
 			}
-			else if (aim_angle <= -Math.PI/2.0) {
-				aim_angle = -(float)(Math.PI/2.0);
+			else if (aim_angle <= -1.0) {
+				aim_angle = -1f;
 			}
 			
 		}
@@ -174,28 +178,103 @@ public class GravShooter extends ApplicationAdapter {
 	}
 	
 	public class Bullet extends Circle {
-		private int x;
-		private int y;
-		private float angle;
+		private Double x;
+		private Double y;
+		private Double vx;
+		private Double vy;
 		
 		public Bullet(int x, int y, float angle) {
-			this.x = x;
-			this.y = y;
-			this.angle = angle;
+			this.x = (double)(x-400);
+			this.y = (double)(y-300);
+			vx = v_bullet*Math.sin(angle);
+			vy = v_bullet*Math.cos(angle);
 		}
 
 		public void draw(ShapeRenderer renderer) {
 			renderer.setColor(1, 1, 0, 1);
-			renderer.circle(x, y, 3);
+			renderer.circle(x.intValue() + 400, y.intValue() + 300, 3);
 		}
 		
+		/*
+		 * calculates the position of the bullet, after taking in 'gravitational' effects from the 'planet'
+		 */
 		public void update()
 		{
-			Double xv = v_bullet*Math.sin(angle);
-			Double yv = v_bullet*Math.cos(angle);
-			x += v_bullet * Gdx.graphics.getDeltaTime();
-			x += xv;
-			y += yv;
+			Double r = Math.pow(x, 2.0) + Math.pow(y, 2.0);
+			Double dv = 1700000.0 * Gdx.graphics.getDeltaTime() * p_mass/r;
+			Double dvx = Math.abs(dv*(x/Math.sqrt(r)));
+			Double dvy = Math.abs(dv*(y/Math.sqrt(r)));
+			if (x>0) {
+				dvx = -dvx;
+			}
+			if (y>0) {
+				dvy = -dvy;
+			}
+			vx += dvx*Gdx.graphics.getDeltaTime();
+			vy += dvy*Gdx.graphics.getDeltaTime();
+			Double dx = (vx)*Gdx.graphics.getDeltaTime();
+			Double dy = (vy)*Gdx.graphics.getDeltaTime();
+			x += dx;
+			y += dy;
 		}
+
+		public boolean isOffscreen()
+		{
+			return 400<=x && x<=-400 && 300<=y && y<=-300;
+		}
+	}
+	
+	public class Asteroid extends Circle {
+		private Double x;
+		private Double y;
+		private Double vx;
+		private Double vy;
+		
+		public Asteroid(int x, int y, float angle) {
+			this.x = (double)(x-400);
+			this.y = (double)(y-300);
+			vx = v_ast*Math.sin(angle);
+			vy = v_ast*Math.cos(angle);
+		}
+
+		public void draw(ShapeRenderer renderer) {
+			renderer.setColor(1, 0, 0, 1);
+			renderer.circle(x.intValue() + 400, y.intValue() + 300, 30);
+		}
+		
+		/*
+		 * calculates the position of the bullet, after taking in 'gravitational' effects from the 'planet'
+		 */
+		public void update()
+		{
+			Double r = Math.pow(x, 2.0) + Math.pow(y, 2.0);
+			Double dv = 1800000.0 * Gdx.graphics.getDeltaTime() * p_mass/r;
+			Double dvx = Math.abs(dv*(x/Math.sqrt(r)));
+			Double dvy = Math.abs(dv*(y/Math.sqrt(r)));
+			if (x>0) {
+				dvx = -dvx;
+			}
+			if (y>0) {
+				dvy = -dvy;
+			}
+			vx += dvx*Gdx.graphics.getDeltaTime();
+			vy += dvy*Gdx.graphics.getDeltaTime();
+			Double dx = (vx)*Gdx.graphics.getDeltaTime();
+			Double dy = (vy)*Gdx.graphics.getDeltaTime();
+			x += dx;
+			y += dy;
+		}
+
+		public boolean isOffscreen()
+		{
+			return 400<=x && x<=-400 && 300<=y && y<=-300;
+		}
+	}
+
+	@Override
+	public void dispose() {
+		font.dispose();
+		renderer.dispose();
+		batch.dispose();
 	}
 }
