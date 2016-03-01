@@ -5,28 +5,33 @@ import java.util.Iterator;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input.Keys;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Circle;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.TimeUtils;
 
 public class GravShooter extends ApplicationAdapter {
 	private SpriteBatch batch;
 	private Defender defender;
+	private Planet planet;
 	private OrthographicCamera camera;
 	private BitmapFont font;
 	private boolean debug;
 	private ShapeRenderer renderer;
 	private Array<Bullet> bullets;
+	private Array<Asteroid> asteroids;
 	private static float v_bullet = 200f;
-	private static float v_ast = 100f;
 	private static double p_mass = 100.0;
 	private long lastShotTime;
 	private long lastAstTime;
+    Circle circle2;
+    Circle planet_circle;
 	
 	@Override
 	public void create () {
@@ -36,10 +41,16 @@ public class GravShooter extends ApplicationAdapter {
 		renderer = new ShapeRenderer();
 		renderer.setAutoShapeType(true);
 		defender = new Defender();
+		planet = new Planet();
 	    bullets = new Array<Bullet>();
+        circle2 = new Circle(0, 0, 15);
+        planet_circle = planet.circle();
 		
 		font = new BitmapFont();
 		debug = true;
+
+	    asteroids = new Array<Asteroid>();
+	    spawnAsteroid();
 	}
 
 	@Override
@@ -48,21 +59,54 @@ public class GravShooter extends ApplicationAdapter {
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 		
 		renderer.begin(ShapeRenderer.ShapeType.Filled);
-		renderer.setColor(0.5f, 1, 0.5f, 1);
-		renderer.circle(400, 300, 100);
+		circle2.setPosition(Gdx.input.getX(), Gdx.graphics.getHeight() - Gdx.input.getY());
+        renderer.circle(circle2.x, circle2.y, circle2.radius);
+
+        planet.draw(renderer);
 		defender.draw(renderer);
 		for(Bullet bullet: bullets) {
 			bullet.draw(renderer);
+	    	bullet.update();
 		}
+		for(Asteroid ast: asteroids) {
+			ast.draw(renderer);
+	    	ast.update();
+		}
+
+		Iterator<Bullet> bullet_iter = bullets.iterator();
+	    while(bullet_iter.hasNext()) {
+	    	Bullet bullet = bullet_iter.next();
+	    	if(bullet.isExpired(TimeUtils.nanoTime())) {
+	    		bullet_iter.remove();
+	    	}
+	    }
+		Iterator<Asteroid> ast_iter = asteroids.iterator();
+		boolean overlap = false;
+	    while(ast_iter.hasNext()) {
+	    	Asteroid ast = ast_iter.next();
+	    	Circle ast_circle = ast.circle();
+	    	if(ast_circle.overlaps(planet_circle)) {
+	    		ast_iter.remove();
+	    		overlap = true;
+	    	}
+	    	batch.begin();
+			if (debug) {
+				font.setColor(1.0f, 1.0f, 1.0f, 1.0f);
+				font.draw(batch, defender.getAngle(), 725, 90);
+				font.draw(batch, defender.getAim(), 725, 110);
+			}
+			batch.end();
+	    }
+
 		renderer.end();
 
-		batch.begin();
-		if (debug) {
-			font.setColor(1.0f, 1.0f, 1.0f, 1.0f);
-			font.draw(batch, defender.getAngle(), 725, 90);
-			font.draw(batch, defender.getAim(), 725, 110);
-		}
-		batch.end();
+//		batch.begin();
+//		if (debug) {
+//			font.setColor(1.0f, 1.0f, 1.0f, 1.0f);
+//			font.draw(batch, defender.getAngle(), 725, 90);
+//			font.draw(batch, defender.getAim(), 725, 110);
+//		}
+//		batch.end();
 
 		if(Gdx.input.isKeyPressed(Keys.LEFT)) defender.aim(-5 * Gdx.graphics.getDeltaTime());
 		if(Gdx.input.isKeyPressed(Keys.RIGHT)) defender.aim(5 * Gdx.graphics.getDeltaTime());
@@ -71,15 +115,8 @@ public class GravShooter extends ApplicationAdapter {
 		if(TimeUtils.nanoTime() - lastShotTime > 500000000 && Gdx.input.isKeyPressed(Keys.SPACE)) {
 			bullets.add(defender.shoot());
 		}
-		
-		Iterator<Bullet> iter = bullets.iterator();
-	    while(iter.hasNext()) {
-	    	Bullet bullet = iter.next();
-	    	bullet.update();
-	    	if(bullet.isOffscreen()) {
-	    		iter.remove();
-	    	}
-	    }
+	    
+	    if(TimeUtils.nanoTime() - lastAstTime > 2130000000) spawnAsteroid();
 	}
 	
 	public class Defender{
@@ -177,17 +214,19 @@ public class GravShooter extends ApplicationAdapter {
 		}
 	}
 	
-	public class Bullet extends Circle {
+	public class Bullet {
 		private Double x;
 		private Double y;
 		private Double vx;
 		private Double vy;
+		private long spawnTime;
 		
 		public Bullet(int x, int y, float angle) {
 			this.x = (double)(x-400);
 			this.y = (double)(y-300);
 			vx = v_bullet*Math.sin(angle);
 			vy = v_bullet*Math.cos(angle);
+			spawnTime = TimeUtils.nanoTime();
 		}
 
 		public void draw(ShapeRenderer renderer) {
@@ -218,37 +257,53 @@ public class GravShooter extends ApplicationAdapter {
 			y += dy;
 		}
 
-		public boolean isOffscreen()
+		public boolean isExpired(long time)
 		{
-			return 400<=x && x<=-400 && 300<=y && y<=-300;
+			return time - spawnTime > 60000000000.0;
+		}
+		
+		public Circle circle() {
+			return new Circle(x.intValue(), y.intValue(), 3);
 		}
 	}
-	
-	public class Asteroid extends Circle {
+
+	public class Asteroid {
 		private Double x;
 		private Double y;
 		private Double vx;
 		private Double vy;
 		
-		public Asteroid(int x, int y, float angle) {
-			this.x = (double)(x-400);
-			this.y = (double)(y-300);
-			vx = v_ast*Math.sin(angle);
-			vy = v_ast*Math.cos(angle);
+		public Asteroid() {
+			x = (double)MathUtils.random(430, 450);
+			y = (double)MathUtils.random(330, 350);
+			if (MathUtils.randomBoolean()) {
+				x = (double)MathUtils.random(-450, 450);
+			}
+			else {
+				y = (double)MathUtils.random(-350, 350);
+			}
+			if (MathUtils.randomBoolean()) {
+				x = -x;
+			}
+			if (MathUtils.randomBoolean()) {
+				y = -y;
+			}
+			vx = (double)MathUtils.random(-40, 40);
+			vy = (double)MathUtils.random(-30, 30);
 		}
 
 		public void draw(ShapeRenderer renderer) {
 			renderer.setColor(1, 0, 0, 1);
-			renderer.circle(x.intValue() + 400, y.intValue() + 300, 30);
+			renderer.circle(x.intValue() + 400, y.intValue() + 300, 15);
 		}
 		
 		/*
-		 * calculates the position of the bullet, after taking in 'gravitational' effects from the 'planet'
+		 * calculates the position of the asteroid, after taking in 'gravitational' effects from the 'planet'
 		 */
 		public void update()
 		{
 			Double r = Math.pow(x, 2.0) + Math.pow(y, 2.0);
-			Double dv = 1800000.0 * Gdx.graphics.getDeltaTime() * p_mass/r;
+			Double dv = 1700000.0 * Gdx.graphics.getDeltaTime() * p_mass/r;
 			Double dvx = Math.abs(dv*(x/Math.sqrt(r)));
 			Double dvy = Math.abs(dv*(y/Math.sqrt(r)));
 			if (x>0) {
@@ -264,10 +319,39 @@ public class GravShooter extends ApplicationAdapter {
 			x += dx;
 			y += dy;
 		}
+		
+		public Circle circle() {
+			return new Circle(x.intValue(), y.intValue(), 15);
+		}
+	}
+	
+	private void spawnAsteroid() {
+	    Asteroid ast = new Asteroid();
+	    asteroids.add(ast);
+	    lastAstTime = TimeUtils.nanoTime();
+	}
 
-		public boolean isOffscreen()
+	public class Planet {
+		private int health;
+		private Color color;
+		
+		public Planet() {
+			health = 0;
+			color = Color.LIME;
+		}
+
+		public void draw(ShapeRenderer renderer) {
+			renderer.setColor(color);
+			renderer.circle(400, 300, 100);
+		}
+		
+		public void update()
 		{
-			return 400<=x && x<=-400 && 300<=y && y<=-300;
+			color = Color.BROWN;
+		}
+		
+		public Circle circle() {
+			return new Circle(400, 300, 100);
 		}
 	}
 
