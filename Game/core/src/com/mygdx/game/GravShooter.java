@@ -32,11 +32,13 @@ public class GravShooter extends ApplicationAdapter {
 	private long lastAstTime;
     Circle circle2;
     Circle planet_circle;
+    public int window_center_x = 400; 
+    public int window_center_y = 300; 
 	
 	@Override
 	public void create () {
 	    camera = new OrthographicCamera();
-	    camera.setToOrtho(false, 800, 600);
+	    camera.setToOrtho(false, window_center_x*2, window_center_y*2);
 		batch = new SpriteBatch();
 		renderer = new ShapeRenderer();
 		renderer.setAutoShapeType(true);
@@ -73,6 +75,9 @@ public class GravShooter extends ApplicationAdapter {
 	    	ast.update();
 		}
 
+		/*
+		 * removes bullets that have floated around for more than 60 seconds
+		 */
 		Iterator<Bullet> bullet_iter = bullets.iterator();
 	    while(bullet_iter.hasNext()) {
 	    	Bullet bullet = bullet_iter.next();
@@ -80,33 +85,40 @@ public class GravShooter extends ApplicationAdapter {
 	    		bullet_iter.remove();
 	    	}
 	    }
+	    
+		/*
+		 * destroys asteroids when they collide with planet or when they collide with bullet
+		 */
 		Iterator<Asteroid> ast_iter = asteroids.iterator();
 		boolean overlap = false;
 	    while(ast_iter.hasNext()) {
 	    	Asteroid ast = ast_iter.next();
 	    	Circle ast_circle = ast.circle();
+	    	
+	    	Iterator<Bullet> bullet_hit = bullets.iterator();
+		    while(bullet_hit.hasNext()) {
+		    	Bullet bullet = bullet_hit.next();
+		    	if(ast_circle.overlaps(bullet.circle())) {
+		    		ast_iter.remove();
+		    		bullet_hit.remove();
+		    		/*Play a sound here*/
+		    	}
+		    }
 	    	if(ast_circle.overlaps(planet_circle)) {
 	    		ast_iter.remove();
-	    		overlap = true;
+	    		/*Play a sound here and put in an explosion or something*/
 	    	}
-	    	batch.begin();
-			if (debug) {
-				font.setColor(1.0f, 1.0f, 1.0f, 1.0f);
-				font.draw(batch, defender.getAngle(), 725, 90);
-				font.draw(batch, defender.getAim(), 725, 110);
-			}
-			batch.end();
 	    }
 
 		renderer.end();
 
-//		batch.begin();
-//		if (debug) {
-//			font.setColor(1.0f, 1.0f, 1.0f, 1.0f);
-//			font.draw(batch, defender.getAngle(), 725, 90);
-//			font.draw(batch, defender.getAim(), 725, 110);
-//		}
-//		batch.end();
+		batch.begin();
+		if (debug) {
+			font.setColor(1.0f, 1.0f, 1.0f, 1.0f);
+			font.draw(batch, defender.getAngle(), 725, 90);
+			font.draw(batch, defender.getAim(), 725, 110);
+		}
+		batch.end();
 
 		if(Gdx.input.isKeyPressed(Keys.LEFT)) defender.aim(-5 * Gdx.graphics.getDeltaTime());
 		if(Gdx.input.isKeyPressed(Keys.RIGHT)) defender.aim(5 * Gdx.graphics.getDeltaTime());
@@ -214,16 +226,18 @@ public class GravShooter extends ApplicationAdapter {
 		}
 	}
 	
-	public class Bullet {
+	public class Bullet extends Circle{
 		private Double x;
 		private Double y;
 		private Double vx;
 		private Double vy;
+		private int radius;
 		private long spawnTime;
 		
 		public Bullet(int x, int y, float angle) {
 			this.x = (double)(x-400);
 			this.y = (double)(y-300);
+			radius = 3;
 			vx = v_bullet*Math.sin(angle);
 			vy = v_bullet*Math.cos(angle);
 			spawnTime = TimeUtils.nanoTime();
@@ -231,7 +245,7 @@ public class GravShooter extends ApplicationAdapter {
 
 		public void draw(ShapeRenderer renderer) {
 			renderer.setColor(1, 1, 0, 1);
-			renderer.circle(x.intValue() + 400, y.intValue() + 300, 3);
+			renderer.circle(true_x(), true_y(), radius);
 		}
 		
 		/*
@@ -261,9 +275,23 @@ public class GravShooter extends ApplicationAdapter {
 		{
 			return time - spawnTime > 60000000000.0;
 		}
+
+		/*
+		 * returns the absolute x position
+		 */
+		public int true_x() {
+			return x.intValue() + window_center_x;
+		}
+
+		/*
+		 * returns the absolute x position
+		 */
+		public int true_y() {
+			return y.intValue() + window_center_y;
+		}
 		
 		public Circle circle() {
-			return new Circle(x.intValue(), y.intValue(), 3);
+			return new Circle(true_x(), true_y(), radius);
 		}
 	}
 
@@ -272,15 +300,17 @@ public class GravShooter extends ApplicationAdapter {
 		private Double y;
 		private Double vx;
 		private Double vy;
+		private int radius;
 		
 		public Asteroid() {
-			x = (double)MathUtils.random(430, 450);
-			y = (double)MathUtils.random(330, 350);
+			radius = MathUtils.random(10,20);
+			x = (double)MathUtils.random(window_center_x + (radius*2), window_center_x + (radius*3));
+			y = (double)MathUtils.random(window_center_y + (radius*2), window_center_y + (radius*3));
 			if (MathUtils.randomBoolean()) {
-				x = (double)MathUtils.random(-450, 450);
+				x = (double)MathUtils.random(-(window_center_x + (radius*3)), window_center_x + (radius*3));
 			}
 			else {
-				y = (double)MathUtils.random(-350, 350);
+				y = (double)MathUtils.random(-(window_center_y + (radius*3)), window_center_y + (radius*3));
 			}
 			if (MathUtils.randomBoolean()) {
 				x = -x;
@@ -288,13 +318,13 @@ public class GravShooter extends ApplicationAdapter {
 			if (MathUtils.randomBoolean()) {
 				y = -y;
 			}
-			vx = (double)MathUtils.random(-40, 40);
-			vy = (double)MathUtils.random(-30, 30);
+			vx = (double)MathUtils.random(-(radius*3), (radius*3));
+			vy = (double)MathUtils.random(-(radius*3), (radius*3));
 		}
 
 		public void draw(ShapeRenderer renderer) {
 			renderer.setColor(1, 0, 0, 1);
-			renderer.circle(x.intValue() + 400, y.intValue() + 300, 15);
+			renderer.circle(true_x(), true_y(), radius);
 		}
 		
 		/*
@@ -320,8 +350,22 @@ public class GravShooter extends ApplicationAdapter {
 			y += dy;
 		}
 		
+		/*
+		 * returns the absolute x position
+		 */
+		public int true_x() {
+			return x.intValue() + window_center_x;
+		}
+
+		/*
+		 * returns the absolute y position
+		 */
+		public int true_y() {
+			return y.intValue() + window_center_y;
+		}
+		
 		public Circle circle() {
-			return new Circle(x.intValue(), y.intValue(), 15);
+			return new Circle(true_x(), true_y(), 15);
 		}
 	}
 	
@@ -336,13 +380,13 @@ public class GravShooter extends ApplicationAdapter {
 		private Color color;
 		
 		public Planet() {
-			health = 0;
+			health = 200;
 			color = Color.LIME;
 		}
 
 		public void draw(ShapeRenderer renderer) {
 			renderer.setColor(color);
-			renderer.circle(400, 300, 100);
+			renderer.circle(window_center_x, window_center_y, window_center_x/4);
 		}
 		
 		public void update()
@@ -351,7 +395,7 @@ public class GravShooter extends ApplicationAdapter {
 		}
 		
 		public Circle circle() {
-			return new Circle(400, 300, 100);
+			return new Circle(window_center_x, window_center_y, window_center_x/4);
 		}
 	}
 
